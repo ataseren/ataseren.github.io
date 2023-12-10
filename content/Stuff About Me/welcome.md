@@ -1,20 +1,7 @@
 ---
 title: Welcome to my Backrooms
 tag:
-  - index
-  - todo
-  - software-development
-  - idea
-  - reading
-  - devsecops
-  - cybersecurity
-  - cloud
-  - books
-  - article
   - me
-  - ml
-  - ai
-  - pentest
   - journal
 ---
 
