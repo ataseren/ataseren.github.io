@@ -1,5 +1,5 @@
 ---
-title: Welcome to my Backrooms
+title: Ata Seren's Backrooms
 tag:
   - index
   - todo
@@ -18,6 +18,7 @@ tag:
   - journal
 ---
 
+# What is this place?
 Creating a website was always something I wanted but my procrastination demons were stronger. Yet, this website is here. 
 
 In my website, I wanted to share about myself, my technical skills, store some notes, ideas, future plans and more. Basically, I wanted a digital playground about my life. Luckily, I learned about this _digital garden_ concept and realized that this is what I wanted. I can use this place to share and spend time on my notes about any topic I want, which I believe that it will help during my learning process and others. I can also create a roadmap for my future plans and get help, ideas and insights from people interested. Most importantly, I can tell people about myself, what I know, do and want.
