@@ -81,7 +81,114 @@ Now, let's have an overview of features in an example security scanning pipeline
 - Git Secrets Detection: Can prevent accidental code-commit containing a secret
 - DAST: Dynamic Application Security Testing approaches security from the outside. It requires applications be fully compiled and operational to identify network, system and OS vulnerabilities.
 
+These are our stages that we will implement in our pipeline. Jenkins pipelines use a file type called _Jenkinsfile_. It's a different file type that you probably used before but it has a simple syntax. For example, this is a single stage Hello World pipeline script:
+```Jenkinsfile
+pipeline {
+    agent any
+
+    stages {
+        stage('Hello') {
+            steps {
+                echo 'Hello World'
+            }
+        }
+    }
+}
+```
+Jenkins allows you to configure many settings according to your needs. However, these parts are the only required ones for a pipeline. Throughout the development of the pipeline, we will use additional parts and syntax rules for tools we will run in stages. For the additional settings and syntax rules you can visit https://www.jenkins.io/doc/book/pipeline/syntax/.
+
+**Tip:** To add a setting, feature or section, you can use _Pipeline Syntax_ located under Pipeline section:
+![[pipeline_syntax.png]]
+In Pipeline Syntax, there are useful information about the syntax and most importantly, 2 tools that will assist you: Snippet Generator and Declarative Directive Generator. These tools help you to generate a Jenkinsfile code according your needs and given parameters.
+
 During my learning process, I ran a build for every step to make sure that the code is correct in terms of syntax and configuration. I will follow the same way throughout the note to both show it to you better and remind myself the process.
+
+## Checkout
+First of all, let's pull our project we want to scan from a Git repository. For our example project, I chose **Vulnado - Intentionally Vulnerable Java Application**. Here is its link: https://github.com/ScaleSec/vulnado
+
+Every time we start the pipeline or a trigger such as a push or a PR to the repository starts the pipeline, the project will be pulled from the repository. We will use **Git** to perform the pull. Jenkins plugin for Git is installed by default. However, we still need to have Git installed in our machine. To do this, simply run command and install Git binary: 
+```bash
+sudo apt-get install git
+```
+After this install, you need to invoke the binary in your Jenkins. For this, you can simply add this command to the pipeline: 
+```
+git 'https://github.com/ScaleSec/vulnado.git'
+```
+This command uses Git plugin for Jenkins to interact with the Git binary in our machine. We will usually interact with tools and programs via such plugins to have a stable and efficient pipeline.
+
+This is our code at the end of this step:
+```
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/ScaleSec/vulnado.git'
+            }
+        }
+    }
+}
+```
+Note that we created a stage under "stages" and in this stage, we added the command under "steps". We will follow the same approach for each stage and commands we need to run.
+This is the pipeline dashboard after our first build:
+![[Pasted image 20231214211411.png]]
+
+## Build
+In DevOps pipelines, **building** is a required stage to see if the changes on the code didn't break the program. If project is successfully built, **testing** stage will start. If the tests are passed, project is finally deployed with a **deployment** stage. In this DevSecOps pipeline, we are aiming to perform security scans and find the vulnerabilities. In other words, we are doing the "testing" part of a traditional pipeline. Therefore, we don't need to bother with building and deploying, *yet*.
+
+Almost every tool in a DevSecOps pipeline requires project to be built to perform efficient scans on them. Some of them build it themselves, some of them don't. Therefore, I usually add a stage to build the project since it can be useful and it is easy to add it to the pipeline.
+
+This project is a Maven project. Therefore, I use a command specific to it to build my project. You can use a different command according to your project to be used in the pipeline:
+```
+mvn clean package
+``` 
+Note that an install may be required to build your project. For example, I needed to install Maven on my machine. 
+
+This is the simple command to run on my terminal to build my project and that's what we should do in the pipeline too. To run a shell command, simply put single quotes at the start and end of the command and add "sh" at the beginning of the command. This will be the step to run in Jenkins pipeline: `sh 'mvn clean package'`
+This is the final code and result of running the pipeline:
+```
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/ScaleSec/vulnado.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+    }
+}
+```
+![[Pasted image 20231214213612.png]]
+
+## SAST
+Here comes the hard part. Previous steps did not require complex tools and processes. We just pulled and build the project. But from now on, we need to use various tools, install them on our machine and make configurations on both the tools and Jenkins itself.
+
+For the SAST stage, I used SonarQube tool. SonarQube is an open-source platform developed by SonarSource for continuous inspection of code quality to perform automatic reviews with static analysis of code to detect bugs and code smells on more than 30 programming languages. I preferred SonarQube instead of other SAST tools because it has a detailed documentation and plugins about integration with Jenkins and SonarQube works with Java projects pretty well. Of course you can similar multi-language-supported tools such as [Semgrep](https://github.com/semgrep/semgrep) or language-specific tools such as [Bandit](https://github.com/PyCQA/bandit).
+
+Let's start with basics. First of all, we must install an instance of SonarQube. You can use a machine on a cloud provider if you want too but for simplicity, we will install a local instance. I prefer to use SonarQube on Docker for simplicity. However, you can install it from the zip file too. Both ways are compatible with Jenkins and this paper. Here is the link and steps for you to follow for installation: https://docs.sonarsource.com/sonarqube/9.8/try-out-sonarqube/
+
+You can understand that installation is successful and ready to be used with Jenkins by trying to access SonarQube by accessing URL http://localhost:9000/ (This is the default URL for SonarQube if you didn't make any custom configuration)
+![[Pasted image 20231214230716.png]]
+This is the first page that will greet you. You can leave it like that. We will login and use it actively after few steps on Jenkins.
+
+Now, we need to download the plugin on Jenkins for SonarQube to connect SonarQube and Jenkins. On the main dashboard of Jenkins, go to Manage Jenkins > Plugins > Available plugins and type "sonarqube". SonarQube Scanner plugin should appear on the top.
+![[Pasted image 20231214231744.png]]
+Mark the box next to the plugin and install the plugin. On the install page, mark the box "Restart Jenkins when installation is complete and no jobs are running" since you need to restart Jenkins eventually to make the plugin available.
+
+![[Pasted image 20231214231840.png]]
+
+
+
+
+
+
 
 
 **This note will be continued.**
