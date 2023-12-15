@@ -172,17 +172,84 @@ Here comes the hard part. Previous steps did not require complex tools and proce
 
 For the SAST stage, I used SonarQube tool. SonarQube is an open-source platform developed by SonarSource for continuous inspection of code quality to perform automatic reviews with static analysis of code to detect bugs and code smells on more than 30 programming languages. I preferred SonarQube instead of other SAST tools because it has a detailed documentation and plugins about integration with Jenkins and SonarQube works with Java projects pretty well. Of course you can similar multi-language-supported tools such as [Semgrep](https://github.com/semgrep/semgrep) or language-specific tools such as [Bandit](https://github.com/PyCQA/bandit).
 
-Let's start with basics. First of all, we must install an instance of SonarQube. You can use a machine on a cloud provider if you want too but for simplicity, we will install a local instance. I prefer to use SonarQube on Docker for simplicity. However, you can install it from the zip file too. Both ways are compatible with Jenkins and this paper. Here is the link and steps for you to follow for installation: https://docs.sonarsource.com/sonarqube/9.8/try-out-sonarqube/
-
-You can understand that installation is successful and ready to be used with Jenkins by trying to access SonarQube by accessing URL http://localhost:9000/ (This is the default URL for SonarQube if you didn't make any custom configuration)
-![[Pasted image 20231214230716.png]]
-This is the first page that will greet you. You can leave it like that. We will login and use it actively after few steps on Jenkins.
-
-Now, we need to download the plugin on Jenkins for SonarQube to connect SonarQube and Jenkins. On the main dashboard of Jenkins, go to Manage Jenkins > Plugins > Available plugins and type "sonarqube". SonarQube Scanner plugin should appear on the top.
+Let's start with the simplest one. We need to download the plugin on Jenkins for SonarQube to connect SonarQube and Jenkins. On the main dashboard of Jenkins, go to Manage Jenkins > Plugins > Available plugins and type "sonarqube". SonarQube Scanner plugin should appear on the top.
 ![[Pasted image 20231214231744.png]]
 Mark the box next to the plugin and install the plugin. On the install page, mark the box "Restart Jenkins when installation is complete and no jobs are running" since you need to restart Jenkins eventually to make the plugin available.
 
 ![[Pasted image 20231214231840.png]]
+
+
+Obviously, we must install an instance of SonarQube. You can use a machine on a cloud provider if you want too but for simplicity, we will install a local instance. You can both use a Docker image or the zip file to run SonarQube. Both ways are simple to perform, compatible with Jenkins and this paper. Here is the link and steps for you to follow for installation: https://docs.sonarsource.com/sonarqube/9.8/try-out-sonarqube/
+
+You can understand that installation is successful and ready to be used with Jenkins by trying to access SonarQube by accessing URL http://localhost:9000/ (This is the default URL for SonarQube if you didn't make any custom configuration). This is the first page that will greet you. Your default username and password is "admin". It will ask you to change your password to continue.
+![[Pasted image 20231214230716.png]]
+
+
+This is the dashboard of SonarQube. Since we don't have any projects created, it provides us options to choose a DevOps platform. Usually, GitHub is selected but we won't follow that path. Because choosing GitHub requires us to have a GitHub App. GitHub Apps are tools that extend GitHub's functionality like opening issues, comment on pull requests, and manage projects. They can also do things outside of GitHub based on events that happen on GitHub.
+![[Pasted image 20231215160950.png]]
+
+Creating such app may be useful for organizations or frequently developed projects. However, this paper's scope is performing a security test on a project and creation of a GitHub App and integrating it to both SonarQube and Jenkins is difficult and unnecessary for a testing pipeline.
+
+Because of this, I want you to choose "Create a local project":
+![[Pasted image 20231215144651.png]]
+
+Give a name to your project. A key will be suggested to you but any value is okay.
+![[Pasted image 20231215144756.png]]
+After this page, you can simply choose "Use the global setting" and create your project.
+
+It will ask you to choose an analysis method. Choose "With Jenkins".
+![[Pasted image 20231215144956.png]]
+In the next page, choose GitHub for "Select your DevOps platform" and it will provide you some steps. We completed some of them. But we didn't complete some steps about Jenkins and SonarQube integration that are not mentioned here.
+
+For the steps of Jenkins integration, there is a document in [SonarQube's website](https://docs.sonarsource.com/sonarqube/10.3/analyzing-source-code/ci-integration/jenkins-integration/). However, in my opinion SonarQube documentations are not enough and even sometimes, wrong. Therefore, I will show you the correct steps.
+
+On your Jenkins dashboard, go to Manage Jenkins > Credentials. In this page, click on System > Global credentials (unrestricted) > Add credentials. In here:
+- Kind must be **Secret Text**
+- Scope must be **Global**
+- Secret must be token generated on SonarQube. You can easily generate it at User > My Account > Security in SonarQube. Generate a Global Analysis Token and copy and paste it here.
+ ![[Pasted image 20231215161203.png]]
+
+Now, from the Jenkins dashboard again, go to Manage Jenkins > System > SonarQube servers. In here, enter a name to your installation, server URL (which is http://localhost:9000 by default) and server authentication token. This is the credential we just added. You should be able to see it in the dropdown menu. Choose it and save.
+![[Pasted image 20231215161238.png]]
+
+
+Now, the final part. On SonarQube, you can see a script that you can add to your pipeline:
+![[Pasted image 20231215153140.png]]
+However, it needs some adjustments and a fix to work properly. First of all we don't need `def mvn = tool 'Default Maven';` part because our Maven is on the PATH. Because of this, we should change the shell command to: `sh "mvn clean verify sonar:sonar -Dsonar.projectKey=vulnado -Dsonar.projectName='vulnado'"` Finally, we must include an installation name in the script. It is not mentioned on SonarQube but it is necessary. Installation name is the name you entered in previous step. For example, my installation name is "sonar-local" and here is the part of the code: 
+`withSonarQubeEnv(installationName: 'sonar-local')`
+
+This is the final code:
+```
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/ScaleSec/vulnado.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps{
+                withSonarQubeEnv(installationName: 'sonar-local') {
+                  sh "mvn clean verify sonar:sonar -Dsonar.projectKey=vulnado -Dsonar.projectName='vulnado'"
+                }
+            }
+        }
+    }
+}
+```
+
+And this is the result of the build:
+![[Pasted image 20231215160259.png]]
+
+## Dependency Check
+
 
 
 
