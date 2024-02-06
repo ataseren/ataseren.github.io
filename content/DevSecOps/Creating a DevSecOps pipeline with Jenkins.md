@@ -2,8 +2,9 @@
 title: Creating a DevSecOps pipeline with Jenkins
 tag: cybersecurity, devsecops
 ---
-# Introduction to DevSecOps Pipelines
-Coming soon...
+# What is DevSecOps Pipeline?
+
+DevSecOps pipelines are similar to DevOps pipelines. They are like assembly lines for building software, but with a big focus on security. These pipelines automate different tasks, like writing code, testing it, putting it into action, and keeping an eye on it afterward. At each step, they also check for security problems, making sure everything stays safe from the start to the end of the process. This way, everyone involved works together to make sure the software is secure right from the beginning.
 # Jenkins Installation
 ## Download and install Jenkins
 First of all, let's setup a Jenkins instance on our machine. Since it has a simple installation and using a container can have a negative impact on performance or storage, I installed Jenkins directly on my machine. I'm using Ubuntu 22.04 on VMware Workstation Pro with 16GB of RAM, 100GB of storage and 8 processor cores. These specs are definitely not a limit or requirement. I will mention the minimal and recommended specs in the following sections.
@@ -135,7 +136,7 @@ This is the pipeline dashboard after our first build:
 ![[Pasted image 20231214211411.png]]
 
 ## Build
-In DevOps pipelines, **building** is a required stage to see if the changes on the code didn't break the program. If project is successfully built, **testing** stage will start. If the tests are passed, project is finally deployed with a **deployment** stage. In this DevSecOps pipeline, we are aiming to perform security scans and find the vulnerabilities. In other words, we are doing the "testing" part of a traditional pipeline. Therefore, we don't need to bother with building and deploying, *yet*.
+In DevOps and DevSecOps pipelines, **building** is a required stage to see if the changes on the code didn't break the program. If project is successfully built, **testing** stage will start. If the tests are passed, project is finally deployed with a **deployment** stage. In this DevSecOps pipeline, we are aiming to perform security scans and find the vulnerabilities. In other words, we are doing the "testing" part of a traditional pipeline. Therefore, we don't need to bother with building and deploying, *yet*.
 
 Almost every tool in a DevSecOps pipeline requires project to be built to perform efficient scans on them. Some of them build it themselves, some of them don't. Therefore, I usually add a stage to build the project since it can be useful and it is easy to add it to the pipeline.
 
@@ -218,7 +219,7 @@ Now, the final part. On SonarQube, you can see a script that you can add to your
 However, it needs some adjustments and a fix to work properly. First of all we don't need `def mvn = tool 'Default Maven';` part because our Maven is on the PATH. Because of this, we should change the shell command to: `sh "mvn clean verify sonar:sonar -Dsonar.projectKey=vulnado -Dsonar.projectName='vulnado'"` Finally, we must include an installation name in the script. It is not mentioned on SonarQube but it is necessary. Installation name is the name you entered in previous step. For example, my installation name is "sonar-local" and here is the part of the code: 
 `withSonarQubeEnv(installationName: 'sonar-local')`
 
-This is the final code:
+This is the final code after this step:
 ```
 pipeline {
     agent any
@@ -250,10 +251,80 @@ And this is the result of the build:
 
 ## Dependency Check
 
+Dependency checks involve evaluating the external components, like libraries and frameworks, used in software development to identify security vulnerabilities, ensure compliance with policies, and mitigate risks.
 
 
+For this purpose, I used OWASP Dependency-Check (ODC). It is an open-source Software Composition Analysis (SCA) tool that attempts to detect publicly disclosed vulnerabilities contained within a project’s dependencies. You can learn more from [here](https://owasp.org/www-project-dependency-check/)
+
+First of all, you must install the Jenkins plugin for ODC. This plugin will help us to perform a dependency check on our project with minimal configurations.
+**!!!!! Image here !!!!!**
+
+After installing the plugin, we must choose an installation of ODC to be run in Jenkins. To choose this, go to Manage Jenkins > Tools and in this page, find "Dependency-Check installations" part. In this part, you have the option to add an ODC installation. As you can see on the image, I chose "Install automatically" instead of giving a path to an installation since it is much easier and you can update it easily by changing the version from this part. On "Add installer" drop-down menu, choose "Install from github.com" option, choose a version, give a name to the installation and save the changes. Don't forget this name, we will use it.
+![[Pasted image 20240206231043.png]]
+
+For the SAST stage, I used SonarQube tool. SonarQube is an open-source platform developed by SonarSource for continuous inspection of code quality to perform automatic reviews with static analysis of code to detect bugs and code smells on more than 30 programming languages. I preferred SonarQube instead of other SAST tools because it has a detailed documentation and plugins about integration with Jenkins and SonarQube works with Java projects pretty well. Of course you can similar multi-language-supported tools such as [Semgrep](https://github.com/semgrep/semgrep) or language-specific tools such as [Bandit](https://github.com/PyCQA/bandit).
+
+Let's start with the simplest one. We need to download the plugin on Jenkins for SonarQube to connect SonarQube and Jenkins. On the main dashboard of Jenkins, go to Manage Jenkins > Plugins > Available plugins and type "sonarqube". SonarQube Scanner plugin should appear on the top.
+
+Finally, to run this step, you should modify the pipeline script. You can simply add this stage to your script:
+```Jenkinsfile
+stage('Dependency-Check') {
+	steps {
+	    dependencyCheck additionalArguments: '', odcInstallation: 'dep-check-auto'
+        }
+}
+```
+
+Here is an important note. "dependencyCheck" option under Snippet Generator can give you a script. However, it is incomplete. It just gives `dependencyCheck additionalArguments: ''` part. Therefore, you should do the steps and use the script above. 
+
+In addition to this command that invokes ODC, I suggest using another command, `dependencyCheckPublisher pattern: ''`. "dependencyCheck" command only invokes ODC and generate an XML file which is usually very large, hard to read and includes unnecessary details. By using this command, you can see the result on a UI that allows user to use the results much easier. You can access to that UI in the build:
+**!!!!! Image here !!!!!**
+
+Here is the final code after this step:
+```
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/ScaleSec/vulnado.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps{
+                withSonarQubeEnv(installationName: 'sonar-local') {
+                  sh "mvn clean verify sonar:sonar -Dsonar.projectKey=vulnado -Dsonar.projectName='vulnado'"
+                }
+            }
+        }
+        stage('Dependency-Check') {
+			steps {
+			    dependencyCheck additionalArguments: '', odcInstallation: 'dep-check-auto'
+			    dependencyCheckPublisher pattern: ''
+			}
+		}
+    }
+}
+```
+
+And this is the result of the build:
+**!!!!!! Image here !!!!!!**
+
+Here is the ODC UI result:
+**!!!!! Image here !!!**
+
+You can find the information about invocation of ODC and the path of generated XML file on console output. It is usually at `/var/lib/jenkins/workspace/vulnado/./dependency-check-report.xml`
+
+Here is another note about your first pipeline run with this step. Depending on you download speed, first run with this step will take relatively longer time than you future runs because at the first run, ODC downloads vulnerabilities from NVD database. You can speed it by using a NVD API key but it is unnecessary since this is a one time process.
 
 
+# SBOM Generation
 
 
 
@@ -264,20 +335,20 @@ Below, there are just some random scribbles for the general steps.
 
 General steps:
 
-1-) Jenkins Setup (default setup to the machine will suffice)
+1-) Jenkins Setup (default setup to the machine will suffice) +++
 
-2-) Jenkins configuration and access through browser
+2-) Jenkins configuration and access through browser +++
 
-3-) New pipeline creation (not a freestyle one)
+3-) New pipeline creation (not a freestyle one) +++
 
-4-) Determining the project to be scanned in pipeline
+4-) Determining the project to be scanned in pipeline +++
 
 5-) Define pipeline steps:
-- Checkout 	
-- Build 	
+- Checkout +++	
+- Build +++
 - Container Security 	
-- SAST 	
-- Dependency-Check 	
+- SAST +++
+- Dependency-Check ++(add images)	
 - SBOM 	
 - SCA 	
 - Git Secrets Detection 	
