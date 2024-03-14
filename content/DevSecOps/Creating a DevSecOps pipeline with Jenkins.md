@@ -7,7 +7,7 @@ tag: cybersecurity, devsecops
 DevSecOps pipelines are similar to DevOps pipelines. They are like assembly lines for building software, but with a big focus on security. These pipelines automate different tasks, like writing code, testing it, putting it into action, and keeping an eye on it afterward. At each step, they also check for security problems, making sure everything stays safe from the start to the end of the process. This way, everyone involved works together to make sure the software is secure right from the beginning.
 # Jenkins Installation
 ## Download and install Jenkins
-First of all, let's setup a Jenkins instance on our machine. Since it has a simple installation and using a container can have a negative impact on performance or storage, I installed Jenkins directly on my machine. I'm using Ubuntu 22.04 on VMware Workstation Pro with 16GB of RAM, 100GB of storage and 8 processor cores. These specs are definitely not a limit or requirement. I will mention the minimal and recommended specs in the following sections.
+First of all, let's setup a Jenkins instance on our machine. Since it has a simple installation and using a container can have a negative impact on performance or storage, I installed Jenkins directly on my virtual machine. I'm using Ubuntu 22.04 on VMware Workstation Pro with 16GB of RAM, 100GB of storage and 8 processor cores. These specs are definitely not a limit or requirement. 
 
 For the installation of Jenkins I simply followed the Ubuntu/Debian section under Linux section in this link: https://www.jenkins.io/doc/book/installing/. It takes you through the installation of Jenkins itself and Java since Jenkins requires Java to run. You can also find minimal and recommended specs, installation guide, troubleshooting and many other useful information about Jenkins. It is very easy to follow but let me give you a spoiler:
 
@@ -30,7 +30,7 @@ At the end of the installation, you can see that this command has:
 - Set Jenkins to listen on port 8080. 
 
 ## Configure Jenkins
-After the command is complete, go to the Jenkins on your web browser. If you didn't do any custom configuration, it is probably in http://localhost:8080. This page will greet you:
+After the installation is complete, go to the Jenkins on your web browser. If you didn't do any custom configuration, it is probably in http://localhost:8080. This page will greet you:
 ![initial_jenkins_login.png](initial_jenkins_login.png)
 From the given path, receive the initial password and access Jenkins. You may need root access to reach the path.
 
@@ -189,7 +189,7 @@ You can understand that installation is successful and ready to be used with Jen
 This is the dashboard of SonarQube. Since we don't have any projects created, it provides us options to choose a DevOps platform. Usually, GitHub is selected but we won't follow that path. Because choosing GitHub requires us to have a GitHub App. GitHub Apps are tools that extend GitHub's functionality like opening issues, comment on pull requests, and manage projects. They can also do things outside of GitHub based on events that happen on GitHub.
 ![[Pasted image 20231215160950.png]]
 
-Creating such app may be useful for organizations or frequently developed projects. However, this paper's scope is performing a security test on a project and creation of a GitHub App and integrating it to both SonarQube and Jenkins is difficult and unnecessary for a testing pipeline.
+Using such app may be useful for organizations or frequently developed projects. However, this paper's scope is performing a security test on a project and creation of a GitHub App and integrating it to both SonarQube and Jenkins is difficult and unnecessary for a testing pipeline.
 
 Because of this, I want you to choose "Create a local project":
 ![[Pasted image 20231215144651.png]]
@@ -249,6 +249,7 @@ pipeline {
 And this is the result of the build:
 ![[Pasted image 20231215160259.png]]
 
+Note: You can also choose the option of using an installer for SonarQube in the Jenkins settings but I didn't mention it because of showing you the basic steps of installing and using SonarQube for any case.
 ## Dependency Check
 
 Dependency checks involve evaluating the external components, like libraries and frameworks, used in software development to identify security vulnerabilities, ensure compliance with policies, and mitigate risks.
@@ -256,15 +257,12 @@ Dependency checks involve evaluating the external components, like libraries and
 
 For this purpose, I used OWASP Dependency-Check (ODC). It is an open-source Software Composition Analysis (SCA) tool that attempts to detect publicly disclosed vulnerabilities contained within a project’s dependencies. You can learn more from [here](https://owasp.org/www-project-dependency-check/)
 
-First of all, you must install the Jenkins plugin for ODC. This plugin will help us to perform a dependency check on our project with minimal configurations.
-**!!!!! Image here !!!!!**
+First of all, you must install the Jenkins plugin for ODC. This plugin will help us to perform a dependency check on our project with minimal configurations. From the plugin page that is shown above, you can simply search for 'dependency-check' and install the plugin.
+![[Pasted image 20240310131630.png]]
 
 After installing the plugin, we must choose an installation of ODC to be run in Jenkins. To choose this, go to Manage Jenkins > Tools and in this page, find "Dependency-Check installations" part. In this part, you have the option to add an ODC installation. As you can see on the image, I chose "Install automatically" instead of giving a path to an installation since it is much easier and you can update it easily by changing the version from this part. On "Add installer" drop-down menu, choose "Install from github.com" option, choose a version, give a name to the installation and save the changes. Don't forget this name, we will use it.
 ![[Pasted image 20240206231043.png]]
 
-For the SAST stage, I used SonarQube tool. SonarQube is an open-source platform developed by SonarSource for continuous inspection of code quality to perform automatic reviews with static analysis of code to detect bugs and code smells on more than 30 programming languages. I preferred SonarQube instead of other SAST tools because it has a detailed documentation and plugins about integration with Jenkins and SonarQube works with Java projects pretty well. Of course you can similar multi-language-supported tools such as [Semgrep](https://github.com/semgrep/semgrep) or language-specific tools such as [Bandit](https://github.com/PyCQA/bandit).
-
-Let's start with the simplest one. We need to download the plugin on Jenkins for SonarQube to connect SonarQube and Jenkins. On the main dashboard of Jenkins, go to Manage Jenkins > Plugins > Available plugins and type "sonarqube". SonarQube Scanner plugin should appear on the top.
 
 Finally, to run this step, you should modify the pipeline script. You can simply add this stage to your script:
 ```Jenkinsfile
@@ -278,7 +276,15 @@ stage('Dependency-Check') {
 Here is an important note. "dependencyCheck" option under Snippet Generator can give you a script. However, it is incomplete. It just gives `dependencyCheck additionalArguments: ''` part. Therefore, you should do the steps and use the script above. 
 
 In addition to this command that invokes ODC, I suggest using another command, `dependencyCheckPublisher pattern: ''`. "dependencyCheck" command only invokes ODC and generate an XML file which is usually very large, hard to read and includes unnecessary details. By using this command, you can see the result on a UI that allows user to use the results much easier. You can access to that UI in the build:
-**!!!!! Image here !!!!!**
+![[Pasted image 20240310140353.png]]
+
+Instead of having the result as a UI in Jenkins, you can directly read the file generated by ODC. It is located in the pipeline's workspace which is /var/lib/jenkins/workspace/\<name of the pipeline\>. However, generating the result and storing in the pipeline's workspace can be inefficient since it is hard to access and read through the workspace's path and generated files can affect the project files or processes of other tools running in the pipeline. To avoid this, I use a Jenkins feature called "archiveArtifacts". This Jenkins command will find the desired file(s) and give us the option to download it. Then, it is safe to remove the generated file from the workspace. 
+Here is a simple script of archiveArtifacts and a shell command to generate a download link and remove the file from workspace:
+```
+archiveArtifacts allowEmptyArchive: true, artifacts: 'dependency-check-report.xml', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+sh ' rm -rf dependency-check-report.xml*'
+```
+In the archiveArtifacts script 'allowEmptyArchive: true' means that this step does not fail build if archiving returns nothing. artifacts: 'dependency-check-report.xml' is the aprt which we choose the file. Wildcards can be used in the name of the file too. 'fingerprint: true' means that Jenkins fingerprints all archived artifacts. 'onlyIfSuccessful: true' means that Jenkins archives artifacts only if build is successful. Finally 'followSymlinks: false' means that all symbolic links found in the workspace will be ignored. 
 
 Here is the final code after this step:
 ```
@@ -307,6 +313,8 @@ pipeline {
 			steps {
 			    dependencyCheck additionalArguments: '', odcInstallation: 'dep-check-auto'
 			    dependencyCheckPublisher pattern: ''
+			    archiveArtifacts allowEmptyArchive: true, artifacts: 'dependency-check-report.xml', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+sh ' rm -rf dependency-check-report.xml*'
 			}
 		}
     }
@@ -314,10 +322,11 @@ pipeline {
 ```
 
 And this is the result of the build:
-**!!!!!! Image here !!!!!!**
+![[Pasted image 20240310153628.png]]
+In this picture, you can see the small download icon next to the build, artifacts listed above and a graph generated by ODC.
 
 Here is the ODC UI result:
-**!!!!! Image here !!!**
+![[Pasted image 20240310140459.png]]
 
 You can find the information about invocation of ODC and the path of generated XML file on console output. It is usually at `/var/lib/jenkins/workspace/vulnado/./dependency-check-report.xml`
 
@@ -326,7 +335,75 @@ Here is another note about your first pipeline run with this step. Depending on 
 
 # SBOM Generation
 
+SBOM stands for Software Bill of Materials. It's a list of all the components, libraries, and dependencies that are used in building a software product. 
 
+SBOM enhances transparency in the software supply chain, allowing stakeholders to understand component composition and origins. This transparency aids in effective risk management by identifying and prioritizing security risks. SBOM also ensures compliance with regulatory standards.
+
+Also, SBOM facilitates efficient vulnerability management, helping teams quickly address security issues. In the event of a security incident, having an SBOM accelerates response efforts, and its integration into the DevSecOps pipeline enables continuous monitoring for ongoing security assessment throughout the software development lifecycle.
+
+For this part, we will use [Syft](https://github.com/anchore/syft) tool, which is a CLI tool and Go library for generating a Software Bill of Materials (SBOM) from container images and filesystems. Before doing anything on Jenkins side, please install Syft by simply using this script:
+```
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+```
+You can find additional installing methods, guides and more details about Syft on [GitHub page of Syft.](https://github.com/anchore/syft)
+
+Now, we can run Syft  on Jenkins by using a shell command. When you type `syft --help` on your terminal, you will see various ways to run Syft for various cases. In our case, we want to scan a directory, which is the directory of Vulnado project. `syft scan dir:path/to/yourproject ` is the command for our case. If you inspect the file hierarchy of Jenkins (you can run a command such as `pwd` in a pipeline or manually inspect the Jenkins files and directories), you will see that everything that we do in the pipeline happens in /var/lib/jenkins/workspace/\<name of the pipeline\>. When we fetch the project files, with our "Checkout" stage, the project is located in this path. Since we are at the same path as the project, we can simply enter "."(dot) as the path to be scanned.
+
+Other than this, we should add `--output` flag to our command to determine the format of the SBOM and its location. You can use this flag like this: `--output <format>=<file>`. To sum up, we should add this command in our stage: `syft scan dir:. --output cyclonedx-json=sbom.json`
+I chose "cyclonedx-json" format because CycloneDX is a very common SBOM format and its JSON version is easier to read than default one. You can change it if you want.
+
+In addition to this command, I will add the artifact commands like previous stage. Here is the final code after this step:
+```
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/ScaleSec/vulnado.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps{
+                withSonarQubeEnv(installationName: 'sonar-docker') {
+                  sh "mvn clean verify sonar:sonar -Dsonar.projectKey=vulnado -Dsonar.projectName='vulnado'"
+                }
+            }
+        }
+        stage('Dependency-Check') {
+			steps {
+			    dependencyCheck additionalArguments: '', odcInstallation: 'dep-check-auto'
+			    dependencyCheckPublisher pattern: ''
+			    archiveArtifacts allowEmptyArchive: true, artifacts: 'dependency-check-report.xml', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+			    sh ' rm -rf dependency-check-report.xml*'
+			}
+		}
+		stage('Generate SBOM') {
+            steps {
+                sh '''
+                syft scan dir:. --output cyclonedx-json=sbom.json
+                '''
+                archiveArtifacts allowEmptyArchive: true, artifacts: 'sbom*', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+                sh ' rm -rf sbom*'
+            }
+            
+        }
+
+    }
+}
+```
+
+And this is the result of the build:
+![[Pasted image 20240310160941.png]]
+
+
+Note: Artifacts may be not visible at the end of the build. Refresh the page and you will see both the artifact list and the download button next to the build timeline.
 
 
 **This note will be continued.**
@@ -345,11 +422,11 @@ General steps:
 
 5-) Define pipeline steps:
 - Checkout +++	
-- Build +++
-- Container Security 	
+- Build +++	
 - SAST +++
-- Dependency-Check ++(add images)	
-- SBOM 	
+- Dependency-Check +++
+- SBOM +++ 	
+- Container Security 
 - SCA 	
 - Git Secrets Detection 	
 - DAST
