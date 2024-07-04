@@ -254,7 +254,6 @@ Note: You can also choose the option of using an installer for SonarQube in the 
 
 Dependency checks involve evaluating the external components, like libraries and frameworks, used in software development to identify security vulnerabilities, ensure compliance with policies, and mitigate risks.
 
-
 For this purpose, I used OWASP Dependency-Check (ODC). It is an open-source Software Composition Analysis (SCA) tool that attempts to detect publicly disclosed vulnerabilities contained within a project’s dependencies. You can learn more from [here](https://owasp.org/www-project-dependency-check/)
 
 First of all, you must install the Jenkins plugin for ODC. This plugin will help us to perform a dependency check on our project with minimal configurations. From the plugin page that is shown above, you can simply search for 'dependency-check' and install the plugin.
@@ -348,7 +347,7 @@ curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -
 ```
 You can find additional installing methods, guides and more details about Syft on [GitHub page of Syft.](https://github.com/anchore/syft)
 
-Now, we can run Syft  on Jenkins by using a shell command. When you type `syft --help` on your terminal, you will see various ways to run Syft for various cases. In our case, we want to scan a directory, which is the directory of Vulnado project. `syft scan dir:path/to/yourproject ` is the command for our case. If you inspect the file hierarchy of Jenkins (you can run a command such as `pwd` in a pipeline or manually inspect the Jenkins files and directories), you will see that everything that we do in the pipeline happens in /var/lib/jenkins/workspace/\<name of the pipeline\>. When we fetch the project files, with our "Checkout" stage, the project is located in this path. Since we are at the same path as the project, we can simply enter "."(dot) as the path to be scanned.
+Now, we can run Syft on Jenkins by using a shell command. When you type `syft --help` on your terminal, you will see various ways to run Syft for various cases. In our case, we want to scan a directory, which is the directory of Vulnado project. `syft scan dir:path/to/yourproject ` is the command for our case. If you inspect the file hierarchy of Jenkins (you can run a command such as `pwd` in a pipeline or manually inspect the Jenkins files and directories), you will see that everything that we do in the pipeline happens in /var/lib/jenkins/workspace/\<name of the pipeline\>. When we fetch the project files, with our "Checkout" stage, the project is located in this path. Since we are at the same path as the project, we can simply enter "."(dot) as the path to be scanned.
 
 Other than this, we should add `--output` flag to our command to determine the format of the SBOM and its location. You can use this flag like this: `--output <format>=<file>`. To sum up, we should add this command in our stage: `syft scan dir:. --output cyclonedx-json=sbom.json`
 I chose "cyclonedx-json" format because CycloneDX is a very common SBOM format and its JSON version is easier to read than default one. You can change it if you want.
@@ -406,6 +405,95 @@ And this is the result of the build:
 Note: Artifacts may be not visible at the end of the build. Refresh the page and you will see both the artifact list and the download button next to the build timeline.
 
 
+# Secrets Detection
+
+Secrets detection is a critical aspect of DevSecOps that involves identifying and managing sensitive information, such as API keys, passwords, and security tokens, embedded within the codebase. By implementing secrets detection early in the CI/CD pipeline, organizations can prevent unauthorized access, mitigate security risks, and ensure compliance with industry standards.
+
+For this part, we will use [detect-secrets](https://github.com/Yelp/detect-secrets), an aptly named module for detecting secrets within a code base. This is a simple but highly effective tool. It is very customizable for various purposes. To show you how to start using it in a pipeline, I'll use its basic features but I encourage you to look for other capabilities of this tool.
+
+This tool is written in Python and installed with Pip. Because of this, we need an adjustment on Jenkins to use it in our pipelines. First of all, let's install the tool with the command:
+```
+pip install detect-secrets
+```
+To avoid any possible permission issues, I suggest you to run this command by using the "jenkins" user. In this way, Jenkins won't have any permission issues since it uses its own tool installed by its own user. 
+
+After the installation, you may need to add the path of this tool to Jenkins. By default, Pip installs this and other tools into `$HOME/.local/bin`. In my case, Pip installed detect-secrets into `/var/lib/jenkins/.local/bin`. This may vary according to your Jenkins and Pip configuration. To make sure that the tool is available in the pipeline, we must add this location to the path. 
+
+You can do this manually by using `jenkins` user and changing the path on the terminal. Alternatively, here is an easier way to do it on Jenkins UI. From the dashboard, go to Manage Jenkins > System > Global properties. In this part, check the Environment Variables and add a variable. For the name, type "PATH+WHATEVERYOUWANT". It must be all caps and no space. I did this because sometimes I had issues with other naming methods. For the value, add the path of your tool.
+![[Pasted image 20240705000127.png]]
+
+After these steps, detect-secrets is ready to use. I added this stage to my Jenkinsfile. I made it write the output to a text file and give it as an artifact, like previous stages.
+```
+stage('Secrets Detection') {
+            steps {
+                sh 'detect-secrets scan > secrets.txt'
+                archiveArtifacts allowEmptyArchive: true, artifacts: 'secrets.txt', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+                sh ' rm -rf secrets.txt'
+
+            }
+        }
+```
+A small tip: By using `--all-files`, you can scan all files recursively, as compared to only scanning Git tracked files. This option is very useful if you are not using Git in your project or if you are using another VCS.
+
+Here is the final code:
+```
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/ScaleSec/vulnado.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps{
+                withSonarQubeEnv(installationName: 'sonar-docker') {
+                  sh "mvn clean verify sonar:sonar -Dsonar.projectKey=vulnado -Dsonar.projectName='vulnado'"
+                }
+            }
+        }
+        stage('Dependency-Check') {
+			steps {
+			    dependencyCheck additionalArguments: '', odcInstallation: 'dep-check-auto'
+			    dependencyCheckPublisher pattern: ''
+			    archiveArtifacts allowEmptyArchive: true, artifacts: 'dependency-check-report.xml', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+			    sh ' rm -rf dependency-check-report.xml*'
+			}
+		}
+		stage('Generate SBOM') {
+            steps {
+                sh '''
+                syft scan dir:. --output cyclonedx-json=sbom.json
+                '''
+                archiveArtifacts allowEmptyArchive: true, artifacts: 'sbom*', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+                sh ' rm -rf sbom*'
+            }
+            
+        }
+        stage('Secrets Detection') {
+            steps {
+                sh 'detect-secrets scan > secrets.txt'
+                archiveArtifacts allowEmptyArchive: true, artifacts: 'secrets.txt', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+                sh ' rm -rf secrets.txt'
+
+            }
+        }
+
+    }
+}
+```
+
+And this is the result of the build:
+![[Pasted image 20240705004348.png]]
+
+
+
 **This note will be continued.**
 Below, there are just some random scribbles for the general steps.
 
@@ -421,14 +509,14 @@ General steps:
 4-) Determining the project to be scanned in pipeline +++
 
 5-) Define pipeline steps:
-- Checkout +++	
-- Build +++	
-- SAST +++
-- Dependency-Check +++
-- SBOM +++ 	
+- Checkout +++	=
+- Build +++	 =
+- SAST +++        =
+- Dependency-Check +++ =
+- SBOM +++ 	   =
 - Container Security 
 - SCA 	
-- Git Secrets Detection 	
+- Git Secrets Detection +++	=
 - DAST
 
 6-) Jenkins pipeline part by part: Create your Jenkinsfile and run a build for every step to make sure that you are correct in terms of syntax and configuration. Of course it is not necessary but it is a good way to follow during the learning process.
