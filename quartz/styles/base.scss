@@ -20,10 +20,11 @@ section {
 }
 
 .text-highlight {
-  background-color: var(--textHighlight);
+  background-color: #fff23688;
   padding: 0 0.1rem;
   border-radius: 5px;
 }
+
 ::selection {
   background: color-mix(in srgb, var(--tertiary) 60%, rgba(255, 255, 255, 0));
   color: var(--darkgray);
@@ -42,20 +43,8 @@ ul,
 .math {
   color: var(--darkgray);
   fill: var(--darkgray);
-  hyphens: auto;
-}
-
-p,
-ul,
-text,
-a,
-li,
-ol,
-ul,
-.katex,
-.math {
   overflow-wrap: anywhere;
-  /* tr and td removed from list of selectors for overflow-wrap, allowing them to use default 'normal' property value */
+  hyphens: auto;
 }
 
 .math {
@@ -182,7 +171,6 @@ a {
     }
 
     & .sidebar.left {
-      z-index: 1;
       left: calc(calc(100vw - $pageWidth) / 2 - $sidePanelWidth);
       @media all and (max-width: $fullPageWidth) {
         gap: 0;
@@ -202,19 +190,11 @@ a {
     }
   }
 
-  & .page-header,
-  & .page-footer {
-    width: $pageWidth;
-    margin-top: 1rem;
-
-    @media all and (max-width: $fullPageWidth) {
-      width: initial;
-    }
-  }
-
   & .page-header {
+    width: $pageWidth;
     margin: $topSpacing auto 0 auto;
     @media all and (max-width: $fullPageWidth) {
+      width: initial;
       margin-top: 2rem;
     }
   }
@@ -541,12 +521,4 @@ ol.overflow {
 .katex-display {
   overflow-x: auto;
   overflow-y: hidden;
-}
-
-.external-embed.youtube,
-iframe.pdf {
-  aspect-ratio: 16 / 9;
-  height: 100%;
-  width: 100%;
-  border-radius: 5px;
 }

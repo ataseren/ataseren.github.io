@@ -38,13 +38,8 @@ type BuildData = {
 
 type FileEvent = "add" | "change" | "delete"
 
-function newBuildId() {
-  return Math.random().toString(36).substring(2, 8)
-}
-
 async function buildQuartz(argv: Argv, mut: Mutex, clientRefresh: () => void) {
   const ctx: BuildCtx = {
-    buildId: newBuildId(),
     argv,
     cfg,
     allSlugs: [],
@@ -162,13 +157,10 @@ async function partialRebuildFromEntrypoint(
     return
   }
 
-  const buildId = newBuildId()
-  ctx.buildId = buildId
-  buildData.lastBuildMs = new Date().getTime()
+  const buildStart = new Date().getTime()
+  buildData.lastBuildMs = buildStart
   const release = await mut.acquire()
-
-  // if there's another build after us, release and let them do it
-  if (ctx.buildId !== buildId) {
+  if (buildData.lastBuildMs > buildStart) {
     release()
     return
   }
@@ -359,22 +351,26 @@ async function rebuildFromEntrypoint(
     toRemove.add(filePath)
   }
 
-  const buildId = newBuildId()
-  ctx.buildId = buildId
-  buildData.lastBuildMs = new Date().getTime()
+  const buildStart = new Date().getTime()
+  buildData.lastBuildMs = buildStart
   const release = await mut.acquire()
 
   // there's another build after us, release and let them do it
-  if (ctx.buildId !== buildId) {
+  if (buildData.lastBuildMs > buildStart) {
     release()
     return
   }
 
   const perf = new PerfTimer()
   console.log(chalk.yellow("Detected change, rebuilding..."))
-
   try {
     const filesToRebuild = [...toRebuild].filter((fp) => !toRemove.has(fp))
+
+    const trackedSlugs = [...new Set([...contentMap.keys(), ...toRebuild, ...trackedAssets])]
+      .filter((fp) => !toRemove.has(fp))
+      .map((fp) => slugifyFilePath(path.posix.relative(argv.directory, fp) as FilePath))
+
+    ctx.allSlugs = [...new Set([...initialSlugs, ...trackedSlugs])]
     const parsedContent = await parseMarkdown(ctx, filesToRebuild)
     for (const content of parsedContent) {
       const [_tree, vfile] = content
@@ -388,13 +384,6 @@ async function rebuildFromEntrypoint(
     const parsedFiles = [...contentMap.values()]
     const filteredContent = filterContent(ctx, parsedFiles)
 
-    // re-update slugs
-    const trackedSlugs = [...new Set([...contentMap.keys(), ...toRebuild, ...trackedAssets])]
-      .filter((fp) => !toRemove.has(fp))
-      .map((fp) => slugifyFilePath(path.posix.relative(argv.directory, fp) as FilePath))
-
-    ctx.allSlugs = [...new Set([...initialSlugs, ...trackedSlugs])]
-
     // TODO: we can probably traverse the link graph to figure out what's safe to delete here
     // instead of just deleting everything
     await rimraf(path.join(argv.output, ".*"), { glob: true })
@@ -407,10 +396,10 @@ async function rebuildFromEntrypoint(
     }
   }
 
+  release()
   clientRefresh()
   toRebuild.clear()
   toRemove.clear()
-  release()
 }
 
 export default async (argv: Argv, mut: Mutex, clientRefresh: () => void) => {

@@ -3,7 +3,7 @@ import { normalizeRelativeURLs } from "../../util/path"
 
 const p = new DOMParser()
 async function mouseEnterHandler(
-  this: HTMLAnchorElement,
+  this: HTMLLinkElement,
   { clientX, clientY }: { clientX: number; clientY: number },
 ) {
   const link = this
@@ -33,7 +33,7 @@ async function mouseEnterHandler(
   thisUrl.hash = ""
   thisUrl.search = ""
   const targetUrl = new URL(link.href)
-  const hash = decodeURIComponent(targetUrl.hash)
+  const hash = targetUrl.hash
   targetUrl.hash = ""
   targetUrl.search = ""
 
@@ -100,7 +100,7 @@ async function mouseEnterHandler(
 }
 
 document.addEventListener("nav", () => {
-  const links = [...document.getElementsByClassName("internal")] as HTMLAnchorElement[]
+  const links = [...document.getElementsByClassName("internal")] as HTMLLinkElement[]
   for (const link of links) {
     link.addEventListener("mouseenter", mouseEnterHandler)
     window.addCleanup(() => link.removeEventListener("mouseenter", mouseEnterHandler))

@@ -3,7 +3,7 @@ import { QuartzComponentProps } from "../../components/types"
 import HeaderConstructor from "../../components/Header"
 import BodyConstructor from "../../components/Body"
 import { pageResources, renderPage } from "../../components/renderPage"
-import { ProcessedContent, QuartzPluginData, defaultProcessedContent } from "../vfile"
+import { ProcessedContent, defaultProcessedContent } from "../vfile"
 import { FullPageLayout } from "../../cfg"
 import path from "path"
 import {
@@ -21,37 +21,22 @@ import { write } from "./helpers"
 import { i18n } from "../../i18n"
 import DepGraph from "../../depgraph"
 
-interface FolderPageOptions extends FullPageLayout {
-  sort?: (f1: QuartzPluginData, f2: QuartzPluginData) => number
-}
-
-export const FolderPage: QuartzEmitterPlugin<Partial<FolderPageOptions>> = (userOpts) => {
+export const FolderPage: QuartzEmitterPlugin<Partial<FullPageLayout>> = (userOpts) => {
   const opts: FullPageLayout = {
     ...sharedPageComponents,
     ...defaultListPageLayout,
-    pageBody: FolderContent({ sort: userOpts?.sort }),
+    pageBody: FolderContent(),
     ...userOpts,
   }
 
-  const { head: Head, header, beforeBody, pageBody, afterBody, left, right, footer: Footer } = opts
+  const { head: Head, header, beforeBody, pageBody, left, right, footer: Footer } = opts
   const Header = HeaderConstructor()
   const Body = BodyConstructor()
 
   return {
     name: "FolderPage",
     getQuartzComponents() {
-      return [
-        Head,
-        Header,
-        Body,
-        ...header,
-        ...beforeBody,
-        pageBody,
-        ...afterBody,
-        ...left,
-        ...right,
-        Footer,
-      ]
+      return [Head, Header, Body, ...header, ...beforeBody, pageBody, ...left, ...right, Footer]
     },
     async getDependencyGraph(_ctx, content, _resources) {
       // Example graph:
